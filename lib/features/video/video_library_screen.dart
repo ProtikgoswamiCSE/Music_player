@@ -9,6 +9,44 @@ import '../../widgets/gallery_video_thumbnail.dart';
 import '../../widgets/glass_card.dart';
 import 'video_player_screen.dart';
 
+Future<void> _confirmDeleteVideo(BuildContext context, MediaTrack track) async {
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  final lib = context.read<MediaLibraryProvider>();
+
+  final confirmed = await showDialog<bool>(
+    context: context,
+    barrierDismissible: true,
+    builder: (dialogContext) {
+      return AlertDialog(
+        title: const Text('Delete video?'),
+        content: Text(
+          '"${track.title}" will be permanently removed from device storage. '
+          'Cancel keeps the video.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      );
+    },
+  );
+
+  if (confirmed != true || !context.mounted) return;
+
+  final err = await lib.deleteVideoFromDevice(track);
+  if (!context.mounted) return;
+  if (err != null && messenger != null) {
+    messenger.showSnackBar(SnackBar(content: Text(err)));
+  }
+}
+
 String? _firstGalleryAssetId(Iterable<MediaTrack> tracks) {
   for (final t in tracks) {
     final id = t.galleryAssetId;
@@ -307,7 +345,8 @@ class _VideoFolderTracksScreen extends StatelessWidget {
                         ),
                       ),
                       IconButton(
-                        onPressed: () => context.read<MediaLibraryProvider>().removeVideo(t),
+                        tooltip: 'Delete video',
+                        onPressed: () => _confirmDeleteVideo(context, t),
                         icon: Icon(Icons.close_rounded, color: Colors.white.withValues(alpha: 0.45)),
                       ),
                     ],

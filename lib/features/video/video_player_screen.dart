@@ -25,9 +25,18 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   bool _isFullScreen = false;
   bool _showOverlayControls = true;
 
+  Future<void> _syncSystemUiMode() async {
+    if (_isFullScreen || !_showOverlayControls) {
+      await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    } else {
+      await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _syncSystemUiMode());
     final ctrl = VideoPlayerController.file(File(widget.track.path));
     _controller = ctrl;
     ctrl.addListener(() {
@@ -45,13 +54,11 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
 
   @override
   void dispose() {
-    if (_isFullScreen) {
-      SystemChrome.setPreferredOrientations([
-        DeviceOrientation.portraitUp,
-        DeviceOrientation.portraitDown,
-      ]);
-      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-    }
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]);
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     _controller?.dispose();
     super.dispose();
   }
@@ -60,7 +67,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     final next = !_isFullScreen;
     setState(() => _isFullScreen = next);
     if (next) {
-      await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
       await SystemChrome.setPreferredOrientations([
         DeviceOrientation.landscapeLeft,
         DeviceOrientation.landscapeRight,
@@ -70,8 +76,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         DeviceOrientation.portraitUp,
         DeviceOrientation.portraitDown,
       ]);
-      await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     }
+    await _syncSystemUiMode();
   }
 
   Future<void> _playAudioOnly(BuildContext context) async {
@@ -90,18 +96,20 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       extendBodyBehindAppBar: true,
       appBar: _isFullScreen
           ? null
-          : AppBar(
-              backgroundColor: Colors.black.withValues(alpha: 0.35),
-              leading: IconButton(
-                icon: const Icon(Icons.arrow_back_ios_new_rounded),
-                onPressed: () => Navigator.of(context).pop(),
-              ),
-              title: Text(
-                widget.track.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
+          : (_showOverlayControls
+              ? AppBar(
+                  backgroundColor: Colors.black.withValues(alpha: 0.35),
+                  leading: IconButton(
+                    icon: const Icon(Icons.arrow_back_ios_new_rounded),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                  title: Text(
+                    widget.track.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                )
+              : null),
       body: Stack(
         fit: StackFit.expand,
         children: [
@@ -119,14 +127,36 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
               ),
             )
           else if (c != null && c.value.isInitialized)
-            Center(
+            Positioned.fill(
               child: GestureDetector(
-                onTap: () => setState(() => _showOverlayControls = !_showOverlayControls),
+                behavior: HitTestBehavior.opaque,
+                onTap: () async {
+                  setState(() => _showOverlayControls = !_showOverlayControls);
+                  await _syncSystemUiMode();
+                },
                 onDoubleTap: _toggleFullScreen,
-                child: AspectRatio(
-                  aspectRatio: c.value.aspectRatio == 0 ? 16 / 9 : c.value.aspectRatio,
-                  child: VideoPlayer(c),
-                ),
+                child: _isFullScreen
+                    ? ClipRect(
+                        child: FittedBox(
+                          fit: BoxFit.cover,
+                          alignment: Alignment.center,
+                          child: Builder(
+                            builder: (context) {
+                              final ar = c.value.aspectRatio == 0 ? 16 / 9 : c.value.aspectRatio;
+                              final sz = c.value.size;
+                              final w = sz.width > 0 ? sz.width : 1920.0;
+                              final h = sz.height > 0 ? sz.height : w / ar;
+                              return SizedBox(width: w, height: h, child: VideoPlayer(c));
+                            },
+                          ),
+                        ),
+                      )
+                    : Center(
+                        child: AspectRatio(
+                          aspectRatio: c.value.aspectRatio == 0 ? 16 / 9 : c.value.aspectRatio,
+                          child: VideoPlayer(c),
+                        ),
+                      ),
               ),
             )
           else
@@ -201,6 +231,38 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                       ),
                     ],
                   ],
+                ),
+              ),
+            ),
+          if (_isFullScreen && _showOverlayControls)
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: Material(
+                color: Colors.black.withValues(alpha: 0.35),
+                child: SafeArea(
+                  bottom: false,
+                  child: SizedBox(
+                    height: kToolbarHeight,
+                    child: Row(
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.arrow_back_ios_new_rounded),
+                          onPressed: () => Navigator.of(context).pop(),
+                        ),
+                        Expanded(
+                          child: Text(
+                            widget.track.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).appBarTheme.titleTextStyle ??
+                                Theme.of(context).textTheme.titleMedium,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),

@@ -6,6 +6,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:photo_manager/photo_manager.dart';
 
 import '../models/media_track.dart';
+import '../utils/delete_local_media.dart';
 
 class MediaLibraryProvider extends ChangeNotifier {
   final List<MediaTrack> _audioTracks = [];
@@ -219,5 +220,35 @@ class MediaLibraryProvider extends ChangeNotifier {
   void removeVideo(MediaTrack track) {
     _videoTracks.removeWhere((t) => t.path == track.path);
     notifyListeners();
+  }
+
+  /// Permanently deletes the video from device storage when possible (gallery asset or local file).
+  /// Returns `null` on success, or a short error message for the UI.
+  Future<String?> deleteVideoFromDevice(MediaTrack track) async {
+    if (kIsWeb) {
+      return 'ওয়েবে ভিডিও মুছে ফেলা যায় না।';
+    }
+
+    final assetId = track.galleryAssetId;
+    if (assetId != null && assetId.isNotEmpty) {
+      try {
+        final deleted = await PhotoManager.editor.deleteWithIds(<String>[assetId]);
+        if (!deleted.contains(assetId)) {
+          return 'ভিডিও মুছে ফেলা যায়নি। অনুমতি বা ফাইল চেক করুন।';
+        }
+        removeVideo(track);
+        return null;
+      } catch (e, st) {
+        debugPrint('deleteVideoFromDevice gallery: $e\n$st');
+        return 'ভিডিও মুছে ফেলা যায়নি।';
+      }
+    }
+
+    final ok = await deleteLocalMediaFile(track.path);
+    if (!ok) {
+      return 'ফাইল মুছে ফেলা যায়নি।';
+    }
+    removeVideo(track);
+    return null;
   }
 }
