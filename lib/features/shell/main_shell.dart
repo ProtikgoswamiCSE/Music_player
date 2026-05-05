@@ -39,15 +39,13 @@ class _MainShellState extends State<MainShell> {
     return AuroraBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        body: SafeArea(
-          child: IndexedStack(
-            index: _index,
-            children: const [
-              HomeScreen(),
-              AudioLibraryScreen(),
-              VideoLibraryScreen(),
-            ],
-          ),
+        body: IndexedStack(
+          index: _index,
+          children: const [
+            HomeScreen(),
+            AudioLibraryScreen(),
+            VideoLibraryScreen(),
+          ],
         ),
         bottomNavigationBar: Consumer<AudioPlayerProvider>(
           builder: (context, audio, _) {

@@ -3,10 +3,12 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/theme/app_theme.dart';
+import 'now_playing_screen.dart';
 import '../../models/media_track.dart';
 import '../../providers/audio_player_provider.dart';
 import '../../providers/media_library_provider.dart';
 import '../../widgets/glass_card.dart';
+import '../../widgets/mini_player_bar.dart';
 
 String _extractFolderName(String path) {
   final parts = path.split(RegExp(r'[/\\]'));
@@ -230,6 +232,7 @@ class _AudioFolderTracksScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(title: Text(folderName)),
+      bottomNavigationBar: audio.currentTrack != null ? const MiniPlayerBar() : null,
       body: tracks.isEmpty
           ? Center(
               child: Text(
@@ -246,7 +249,12 @@ class _AudioFolderTracksScreen extends StatelessWidget {
                 final active = audio.currentTrack?.path == t.path;
                 return GlassCard(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  onTap: () => context.read<AudioPlayerProvider>().playTrack(t),
+                  onTap: () {
+                    context.read<AudioPlayerProvider>().playTrack(t);
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(builder: (_) => const NowPlayingScreen()),
+                    );
+                  },
                   child: Row(
                     children: [
                       Icon(

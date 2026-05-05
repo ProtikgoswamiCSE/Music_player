@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:video_player/video_player.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../audio/now_playing_screen.dart';
 import '../../models/media_track.dart';
 import '../../providers/audio_player_provider.dart';
 import '../../widgets/glass_card.dart';
@@ -22,30 +24,46 @@ class VideoPlayerScreen extends StatefulWidget {
 class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   VideoPlayerController? _controller;
   bool _initFailed = false;
-  bool _isFullScreen = false;
-  bool _showOverlayControls = true;
+  bool _isFullScreen = true;
+  bool _showOverlayControls = false;
+  double _videoScale = 1.0;
+  double _baseVideoScale = 1.0;
+  bool _isWakelockEnabled = false;
 
   Future<void> _syncSystemUiMode() async {
-    if (_isFullScreen || !_showOverlayControls) {
-      await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+  }
+
+  Future<void> _syncWakelock({required bool shouldKeepAwake}) async {
+    if (_isWakelockEnabled == shouldKeepAwake) return;
+    _isWakelockEnabled = shouldKeepAwake;
+    if (shouldKeepAwake) {
+      await WakelockPlus.enable();
     } else {
-      await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+      await WakelockPlus.disable();
     }
   }
 
   @override
   void initState() {
     super.initState();
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     WidgetsBinding.instance.addPostFrameCallback((_) => _syncSystemUiMode());
     final ctrl = VideoPlayerController.file(File(widget.track.path));
     _controller = ctrl;
     ctrl.addListener(() {
+      _syncWakelock(shouldKeepAwake: ctrl.value.isPlaying);
       if (mounted) setState(() {});
     });
     ctrl.initialize().then((_) {
       if (mounted) {
         setState(() {});
         ctrl.play();
+        _syncWakelock(shouldKeepAwake: true);
       }
     }).catchError((_) {
       if (mounted) setState(() => _initFailed = true);
@@ -58,7 +76,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       DeviceOrientation.portraitUp,
       DeviceOrientation.portraitDown,
     ]);
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    WakelockPlus.disable();
     _controller?.dispose();
     super.dispose();
   }
@@ -83,8 +102,11 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   Future<void> _playAudioOnly(BuildContext context) async {
     await _controller?.pause();
     if (!context.mounted) return;
-    await context.read<AudioPlayerProvider>().playTrack(widget.track);
-    if (context.mounted) Navigator.of(context).pop();
+    context.read<AudioPlayerProvider>().playTrack(widget.track);
+    if (!context.mounted) return;
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute<void>(builder: (_) => const NowPlayingScreen()),
+    );
   }
 
   @override
@@ -94,22 +116,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     return Scaffold(
       backgroundColor: AppColors.voidBlack,
       extendBodyBehindAppBar: true,
-      appBar: _isFullScreen
-          ? null
-          : (_showOverlayControls
-              ? AppBar(
-                  backgroundColor: Colors.black.withValues(alpha: 0.35),
-                  leading: IconButton(
-                    icon: const Icon(Icons.arrow_back_ios_new_rounded),
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
-                  title: Text(
-                    widget.track.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                )
-              : null),
+      appBar: null,
       body: Stack(
         fit: StackFit.expand,
         children: [
@@ -135,28 +142,32 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                   await _syncSystemUiMode();
                 },
                 onDoubleTap: _toggleFullScreen,
-                child: _isFullScreen
-                    ? ClipRect(
-                        child: FittedBox(
-                          fit: BoxFit.cover,
-                          alignment: Alignment.center,
-                          child: Builder(
-                            builder: (context) {
-                              final ar = c.value.aspectRatio == 0 ? 16 / 9 : c.value.aspectRatio;
-                              final sz = c.value.size;
-                              final w = sz.width > 0 ? sz.width : 1920.0;
-                              final h = sz.height > 0 ? sz.height : w / ar;
-                              return SizedBox(width: w, height: h, child: VideoPlayer(c));
-                            },
-                          ),
-                        ),
-                      )
-                    : Center(
-                        child: AspectRatio(
-                          aspectRatio: c.value.aspectRatio == 0 ? 16 / 9 : c.value.aspectRatio,
-                          child: VideoPlayer(c),
-                        ),
+                onScaleStart: (_) => _baseVideoScale = _videoScale,
+                onScaleUpdate: (details) {
+                  if (details.pointerCount < 2) return;
+                  setState(() {
+                    _videoScale = (_baseVideoScale * details.scale).clamp(0.6, 4.0);
+                  });
+                },
+                child: ClipRect(
+                  child: Transform.scale(
+                    scale: _videoScale,
+                    alignment: Alignment.center,
+                    child: FittedBox(
+                      fit: BoxFit.cover,
+                      alignment: Alignment.center,
+                      child: Builder(
+                        builder: (context) {
+                          final ar = c.value.aspectRatio == 0 ? 16 / 9 : c.value.aspectRatio;
+                          final sz = c.value.size;
+                          final w = sz.width > 0 ? sz.width : 1920.0;
+                          final h = sz.height > 0 ? sz.height : w / ar;
+                          return SizedBox(width: w, height: h, child: VideoPlayer(c));
+                        },
                       ),
+                    ),
+                  ),
+                ),
               ),
             )
           else
@@ -234,7 +245,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                 ),
               ),
             ),
-          if (_isFullScreen && _showOverlayControls)
+          if (_showOverlayControls)
             Positioned(
               top: 0,
               left: 0,

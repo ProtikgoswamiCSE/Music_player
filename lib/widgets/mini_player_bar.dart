@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../core/theme/app_theme.dart';
+import '../features/audio/now_playing_screen.dart';
 import '../providers/audio_player_provider.dart';
 
 class MiniPlayerBar extends StatelessWidget {
@@ -30,28 +31,35 @@ class MiniPlayerBar extends StatelessWidget {
 
     return Material(
       color: Colors.transparent,
-      child: Container(
-        margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.violetGlow.withValues(alpha: 0.35),
-              blurRadius: 24,
-              offset: const Offset(0, 10),
-            ),
-          ],
-          gradient: LinearGradient(
-            colors: [
-              AppColors.deepSpace.withValues(alpha: 0.95),
-              const Color(0xFF1E1B3A).withValues(alpha: 0.98),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(builder: (_) => const NowPlayingScreen()),
+          );
+        },
+        child: Container(
+          margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.violetGlow.withValues(alpha: 0.35),
+                blurRadius: 24,
+                offset: const Offset(0, 10),
+              ),
             ],
+            gradient: LinearGradient(
+              colors: [
+                AppColors.deepSpace.withValues(alpha: 0.95),
+                const Color(0xFF1E1B3A).withValues(alpha: 0.98),
+              ],
+            ),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
           ),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          child: Column(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -94,6 +102,12 @@ class MiniPlayerBar extends StatelessWidget {
                       ],
                     ),
                   ),
+                  IconButton.filledTonal(
+                    tooltip: 'Close song',
+                    onPressed: () => audio.stop(),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                  const SizedBox(width: 4),
                   IconButton.filledTonal(
                     onPressed: () => audio.isPlaying ? audio.pause() : audio.resume(),
                     icon: Icon(audio.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded),
@@ -140,6 +154,7 @@ class MiniPlayerBar extends StatelessWidget {
                 ),
               ),
             ],
+            ),
           ),
         ),
       ),

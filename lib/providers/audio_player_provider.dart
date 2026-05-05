@@ -22,6 +22,7 @@ class AudioPlayerProvider extends ChangeNotifier {
     _player.playerStateStream.listen((_) => notifyListeners());
     _player.positionStream.listen((_) => notifyListeners());
     _player.durationStream.listen((_) => notifyListeners());
+    _player.volumeStream.listen((_) => notifyListeners());
   }
 
   Future<void> _configureSession() async {
@@ -51,6 +52,7 @@ class AudioPlayerProvider extends ChangeNotifier {
   Future<void> pause() => _player.pause();
   Future<void> resume() => _player.play();
   Future<void> seek(Duration position) => _player.seek(position);
+  Future<void> setVolume(double value) => _player.setVolume(value.clamp(0.0, 1.0));
 
   Future<void> stop() async {
     await _player.stop();
@@ -61,6 +63,7 @@ class AudioPlayerProvider extends ChangeNotifier {
   bool get isPlaying => _player.playing;
   Duration get position => _player.position;
   Duration? get duration => _player.duration;
+  double get volume => _player.volume;
 
   @override
   void dispose() {
