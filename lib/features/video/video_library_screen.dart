@@ -4,9 +4,11 @@ import 'package:provider/provider.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../models/media_track.dart';
+import '../../providers/audio_player_provider.dart';
 import '../../providers/media_library_provider.dart';
 import '../../widgets/gallery_video_thumbnail.dart';
 import '../../widgets/glass_card.dart';
+import '../../widgets/mini_player_bar.dart';
 import 'video_player_screen.dart';
 
 Future<void> _confirmDeleteVideo(BuildContext context, MediaTrack track) async {
@@ -275,12 +277,14 @@ class _VideoFolderTracksScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final lib = context.watch<MediaLibraryProvider>();
+    final audio = context.watch<AudioPlayerProvider>();
     final tracks = lib.videoTracks.where((t) => _extractFolderName(t.path) == folderName).toList()
       ..sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
 
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(title: Text(folderName)),
+      bottomNavigationBar: audio.currentTrack != null ? const MiniPlayerBar() : null,
       body: tracks.isEmpty
           ? Center(
               child: Text(
@@ -294,6 +298,8 @@ class _VideoFolderTracksScreen extends StatelessWidget {
               separatorBuilder: (_, _) => const SizedBox(height: 10),
               itemBuilder: (context, i) {
                 final t = tracks[i];
+                final activeAsAudio =
+                    audio.currentTrack?.path == t.path && audio.currentTrack?.kind == MediaKind.video;
                 return GlassCard(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   onTap: () => Navigator.of(context).push(
@@ -308,7 +314,26 @@ class _VideoFolderTracksScreen extends StatelessWidget {
                         builder: (_) {
                           final id = t.galleryAssetId;
                           if (id != null && id.isNotEmpty) {
-                            return GalleryVideoThumbnail(assetId: id, width: 56, height: 56, borderRadius: 12);
+                            return Stack(
+                              clipBehavior: Clip.none,
+                              children: [
+                                GalleryVideoThumbnail(assetId: id, width: 56, height: 56, borderRadius: 12),
+                                if (activeAsAudio)
+                                  Positioned(
+                                    right: -2,
+                                    bottom: -2,
+                                    child: Container(
+                                      padding: const EdgeInsets.all(4),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.roseAccent,
+                                        shape: BoxShape.circle,
+                                        border: Border.all(color: AppColors.deepSpace, width: 2),
+                                      ),
+                                      child: const Icon(Icons.graphic_eq_rounded, size: 14, color: Colors.white),
+                                    ),
+                                  ),
+                              ],
+                            );
                           }
                           return Container(
                             width: 56,
@@ -322,7 +347,10 @@ class _VideoFolderTracksScreen extends StatelessWidget {
                                 ],
                               ),
                             ),
-                            child: Icon(Icons.play_circle_fill_rounded, color: Colors.white.withValues(alpha: 0.95)),
+                            child: Icon(
+                              activeAsAudio ? Icons.graphic_eq_rounded : Icons.play_circle_fill_rounded,
+                              color: Colors.white.withValues(alpha: 0.95),
+                            ),
                           );
                         },
                       ),
@@ -335,7 +363,10 @@ class _VideoFolderTracksScreen extends StatelessWidget {
                               t.title,
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontWeight: FontWeight.w600),
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: activeAsAudio ? AppColors.roseAccent : Colors.white,
+                              ),
                             ),
                             Text(
                               subtitleBuilder(t),

@@ -1,13 +1,15 @@
 import 'dart:io';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:screen_brightness/screen_brightness.dart';
 import 'package:video_player/video_player.dart';
+import 'package:volume_controller/volume_controller.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../../core/theme/app_theme.dart';
-import '../audio/now_playing_screen.dart';
 import '../../models/media_track.dart';
 import '../../providers/audio_player_provider.dart';
 import '../../widgets/glass_card.dart';
@@ -29,6 +31,17 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   double _videoScale = 1.0;
   double _baseVideoScale = 1.0;
   bool _isWakelockEnabled = false;
+  final VolumeController _systemVolumeController = VolumeController.instance;
+  StreamSubscription<double>? _systemVolumeSub;
+  final ScreenBrightness _screenBrightnessController = ScreenBrightness.instance;
+  StreamSubscription<double>? _systemBrightnessSub;
+  double _systemVolume = 1.0;
+  double _brightnessLevel = 1.0;
+  bool _useSystemBrightness = true;
+  bool _appBrightnessChanged = false;
+  _DragZone _activeDragZone = _DragZone.none;
+  double _dragStartDy = 0;
+  double _dragStartValue = 0;
 
   Future<void> _syncSystemUiMode() async {
     await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
@@ -53,6 +66,19 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     ]);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     WidgetsBinding.instance.addPostFrameCallback((_) => _syncSystemUiMode());
+    _systemVolumeController.showSystemUI = false;
+    _systemVolumeController.getVolume().then((value) {
+      if (!mounted) return;
+      setState(() => _systemVolume = value.clamp(0.0, 1.0));
+    });
+    _systemVolumeSub = _systemVolumeController.addListener(
+      (value) {
+        if (!mounted) return;
+        setState(() => _systemVolume = value.clamp(0.0, 1.0));
+      },
+      fetchInitialVolume: false,
+    );
+    _setupBrightnessControl();
     final ctrl = VideoPlayerController.file(File(widget.track.path));
     _controller = ctrl;
     ctrl.addListener(() {
@@ -63,6 +89,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       if (mounted) {
         setState(() {});
         ctrl.play();
+        ctrl.setVolume(1.0);
         _syncWakelock(shouldKeepAwake: true);
       }
     }).catchError((_) {
@@ -78,8 +105,46 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     ]);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     WakelockPlus.disable();
+    _systemVolumeSub?.cancel();
+    _systemVolumeController.removeListener();
+    _systemBrightnessSub?.cancel();
+    if (_appBrightnessChanged) {
+      unawaited(_screenBrightnessController.resetApplicationScreenBrightness());
+    }
     _controller?.dispose();
     super.dispose();
+  }
+
+  Future<void> _setupBrightnessControl() async {
+    try {
+      final canChangeSystem = await _screenBrightnessController.canChangeSystemBrightness;
+      if (!mounted) return;
+      _useSystemBrightness = canChangeSystem;
+
+      if (_useSystemBrightness) {
+        final value = await _screenBrightnessController.system;
+        if (!mounted) return;
+        setState(() => _brightnessLevel = value.clamp(0.0, 1.0));
+        _systemBrightnessSub =
+            _screenBrightnessController.onSystemScreenBrightnessChanged.listen(
+          (systemValue) {
+            if (!mounted || !_useSystemBrightness) return;
+            setState(() => _brightnessLevel = systemValue.clamp(0.0, 1.0));
+          },
+          onError: (_) {
+            if (!mounted) return;
+            setState(() => _useSystemBrightness = false);
+          },
+        );
+      } else {
+        final appValue = await _screenBrightnessController.application;
+        if (!mounted) return;
+        setState(() => _brightnessLevel = appValue.clamp(0.0, 1.0));
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _useSystemBrightness = false);
+    }
   }
 
   Future<void> _toggleFullScreen() async {
@@ -103,10 +168,54 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     await _controller?.pause();
     if (!context.mounted) return;
     context.read<AudioPlayerProvider>().playTrack(widget.track);
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        const SnackBar(
+          content: Text('অডিও চালু হয়েছে'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    await _syncSystemUiMode();
+    if (mounted) {
+      setState(() {
+        _showOverlayControls = false;
+      });
+    }
     if (!context.mounted) return;
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute<void>(builder: (_) => const NowPlayingScreen()),
-    );
+    Navigator.of(context).pop();
+  }
+
+  void _handleVerticalDragStart(DragStartDetails details, BoxConstraints constraints) {
+    final halfWidth = constraints.maxWidth / 2;
+    _activeDragZone = details.localPosition.dx >= halfWidth ? _DragZone.right : _DragZone.left;
+    _dragStartDy = details.localPosition.dy;
+    _dragStartValue = _activeDragZone == _DragZone.right ? _systemVolume : _brightnessLevel;
+  }
+
+  void _handleVerticalDragUpdate(DragUpdateDetails details, BoxConstraints constraints) {
+    if (_activeDragZone == _DragZone.none) return;
+    final dragDistance = _dragStartDy - details.localPosition.dy;
+    final normalizedDelta = dragDistance / constraints.maxHeight;
+    final nextValue = (_dragStartValue + normalizedDelta).clamp(0.0, 1.0);
+    if (_activeDragZone == _DragZone.right) {
+      _systemVolume = nextValue;
+      _systemVolumeController.setVolume(_systemVolume);
+    } else {
+      _brightnessLevel = nextValue;
+      if (_useSystemBrightness) {
+        unawaited(_screenBrightnessController.setSystemScreenBrightness(_brightnessLevel));
+      } else {
+        _appBrightnessChanged = true;
+        unawaited(_screenBrightnessController.setApplicationScreenBrightness(_brightnessLevel));
+      }
+    }
+    if (mounted) setState(() {});
+  }
+
+  void _handleVerticalDragEnd(_) {
+    _activeDragZone = _DragZone.none;
+    if (mounted) setState(() {});
   }
 
   @override
@@ -135,39 +244,55 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
             )
           else if (c != null && c.value.isInitialized)
             Positioned.fill(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () async {
-                  setState(() => _showOverlayControls = !_showOverlayControls);
-                  await _syncSystemUiMode();
-                },
-                onDoubleTap: _toggleFullScreen,
-                onScaleStart: (_) => _baseVideoScale = _videoScale,
-                onScaleUpdate: (details) {
-                  if (details.pointerCount < 2) return;
-                  setState(() {
-                    _videoScale = (_baseVideoScale * details.scale).clamp(0.6, 4.0);
-                  });
-                },
-                child: ClipRect(
-                  child: Transform.scale(
-                    scale: _videoScale,
-                    alignment: Alignment.center,
-                    child: FittedBox(
-                      fit: BoxFit.cover,
-                      alignment: Alignment.center,
-                      child: Builder(
-                        builder: (context) {
-                          final ar = c.value.aspectRatio == 0 ? 16 / 9 : c.value.aspectRatio;
-                          final sz = c.value.size;
-                          final w = sz.width > 0 ? sz.width : 1920.0;
-                          final h = sz.height > 0 ? sz.height : w / ar;
-                          return SizedBox(width: w, height: h, child: VideoPlayer(c));
-                        },
-                      ),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  return GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () async {
+                      setState(() => _showOverlayControls = !_showOverlayControls);
+                      await _syncSystemUiMode();
+                    },
+                    onDoubleTap: _toggleFullScreen,
+                    onScaleStart: (_) => _baseVideoScale = _videoScale,
+                    onScaleUpdate: (details) {
+                      if (details.pointerCount < 2) return;
+                      setState(() {
+                        _videoScale = (_baseVideoScale * details.scale).clamp(0.6, 4.0);
+                      });
+                    },
+                    onVerticalDragStart: (details) =>
+                        _handleVerticalDragStart(details, constraints),
+                    onVerticalDragUpdate: (details) =>
+                        _handleVerticalDragUpdate(details, constraints),
+                    onVerticalDragEnd: _handleVerticalDragEnd,
+                    onVerticalDragCancel: () => _handleVerticalDragEnd(null),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        ClipRect(
+                          child: Transform.scale(
+                            scale: _videoScale,
+                            alignment: Alignment.center,
+                            child: FittedBox(
+                              fit: BoxFit.cover,
+                              alignment: Alignment.center,
+                              child: Builder(
+                                builder: (context) {
+                                  final ar =
+                                      c.value.aspectRatio == 0 ? 16 / 9 : c.value.aspectRatio;
+                                  final sz = c.value.size;
+                                  final w = sz.width > 0 ? sz.width : 1920.0;
+                                  final h = sz.height > 0 ? sz.height : w / ar;
+                                  return SizedBox(width: w, height: h, child: VideoPlayer(c));
+                                },
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                ),
+                  );
+                },
               ),
             )
           else
@@ -277,8 +402,34 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                 ),
               ),
             ),
+          if (_activeDragZone != _DragZone.none)
+            Positioned(
+              top: MediaQuery.paddingOf(context).top + 20,
+              left: _activeDragZone == _DragZone.left ? 20 : null,
+              right: _activeDragZone == _DragZone.right ? 20 : null,
+              child: GlassCard(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      _activeDragZone == _DragZone.right
+                          ? Icons.volume_up_rounded
+                          : Icons.brightness_6_rounded,
+                      size: 18,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '${((_activeDragZone == _DragZone.right ? _systemVolume : _brightnessLevel) * 100).round()}%',
+                    ),
+                  ],
+                ),
+              ),
+            ),
         ],
       ),
     );
   }
 }
+
+enum _DragZone { none, left, right }
