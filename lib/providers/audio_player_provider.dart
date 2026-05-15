@@ -41,8 +41,8 @@ class AudioPlayerProvider extends ChangeNotifier {
           id: track.path,
           title: track.title,
           album: track.kind == MediaKind.video
-              ? 'Video · শুধু অডিও'
-              : 'লোকাল অডিও',
+              ? 'Video · audio only'
+              : 'Local audio',
         ),
       ),
     );

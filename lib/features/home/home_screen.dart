@@ -28,7 +28,7 @@ class HomeScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'অডিও টাবে ফোনের গান, ভিডিও টাবে গ্যালারির ভিডিও — অ্যাপ খুললেই লোড হয়। Music ও Photos/Videos অনুমতি দিন; লিস্ট খালি থাকলে অডিও/ভিডিও ট্যাবে রিফ্রেশ চাপুন।',
+                  'Use the Audio tab for music on your phone and the Video tab for gallery videos — they load when you open the app. Allow Music and Photos/Videos access; if a list is empty, pull to refresh or use the tab refresh button.',
                   style: TextStyle(
                     height: 1.45,
                     color: Colors.white.withValues(alpha: 0.72),
@@ -53,7 +53,7 @@ class HomeScreen extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'ব্যাকগ্রাউন্ড প্লে',
+                          'Background playback',
                           style: TextStyle(
                             fontWeight: FontWeight.w700,
                             color: Colors.white.withValues(alpha: 0.95),
@@ -61,7 +61,7 @@ class HomeScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'প্লে চালু রেখে অন্য অ্যাপ বা লক স্ক্রিন — নোটিফিকেশন থেকে নিয়ন্ত্রণ করুন।',
+                          'Keep playback going while you use other apps or the lock screen — control it from the notification.',
                           style: TextStyle(
                             fontSize: 13,
                             color: Colors.white.withValues(alpha: 0.65),
@@ -85,8 +85,8 @@ class HomeScreen extends StatelessWidget {
                 Expanded(
                   child: _HubTile(
                     icon: Icons.audiotrack_rounded,
-                    title: 'অডিও',
-                    subtitle: 'গান ও পডকাস্ট',
+                    title: 'Audio',
+                    subtitle: 'Songs & podcasts',
                     gradient: [
                       AppColors.violetGlow.withValues(alpha: 0.85),
                       AppColors.roseAccent.withValues(alpha: 0.55),
@@ -97,8 +97,8 @@ class HomeScreen extends StatelessWidget {
                 Expanded(
                   child: _HubTile(
                     icon: Icons.ondemand_video_rounded,
-                    title: 'ভিডিও',
-                    subtitle: 'ফুল স্ক্রিন বা শুধু শব্দ',
+                    title: 'Video',
+                    subtitle: 'Fullscreen or audio only',
                     gradient: [
                       AppColors.cyanAccent.withValues(alpha: 0.75),
                       AppColors.violetGlow.withValues(alpha: 0.55),

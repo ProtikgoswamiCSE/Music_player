@@ -93,7 +93,7 @@ class MiniPlayerBar extends StatelessWidget {
                           ),
                         ),
                         Text(
-                          audio.isPlaying ? 'চলছে…' : 'বিরতি',
+                          audio.isPlaying ? 'Playing…' : 'Paused',
                           style: TextStyle(
                             color: Colors.white.withValues(alpha: 0.65),
                             fontSize: 12,

@@ -34,7 +34,7 @@ class MediaLibraryProvider extends ChangeNotifier {
   /// Loads all songs from the phone library (Android MediaStore / iOS).
   Future<void> loadDeviceMusic() async {
     if (kIsWeb) {
-      deviceMusicScanMessage = 'ওয়েবে ডিভাইসের গান তালিকা দেখানো যায় না।';
+      deviceMusicScanMessage = 'Device music cannot be listed on the web.';
       notifyListeners();
       return;
     }
@@ -59,7 +59,7 @@ class MediaLibraryProvider extends ChangeNotifier {
       final allowed = await query.checkAndRequest();
       if (!allowed) {
         deviceMusicScanMessage =
-            'মিউজিক লাইব্রেরি অ্যাক্সেসের অনুমতি দিন (সেটিংস → অ্যাপ → Music Player → অনুমতি)। পিক্সেলে “Music and audio” অন করে রিফ্রেশ করুন।';
+            'Allow access to your music library (Settings → Apps → Music Player → Permissions). On Pixel, turn on “Music and audio” and tap refresh.';
         return;
       }
 
@@ -96,7 +96,7 @@ class MediaLibraryProvider extends ChangeNotifier {
       deviceMusicScanMessage = null;
     } catch (e, st) {
       debugPrint('loadDeviceMusic failed: $e\n$st');
-      deviceMusicScanMessage = 'গান লোড করা যায়নি। আবার চেষ্টা করুন।';
+      deviceMusicScanMessage = 'Could not load songs. Please try again.';
     } finally {
       isScanningDeviceMusic = false;
       notifyListeners();
@@ -106,7 +106,7 @@ class MediaLibraryProvider extends ChangeNotifier {
   /// Gallery / Photos videos (Android + iOS).
   Future<void> loadDeviceVideos() async {
     if (kIsWeb) {
-      deviceVideoScanMessage = 'ওয়েবে ডিভাইসের ভিডিও তালিকা দেখানো যায় না।';
+      deviceVideoScanMessage = 'Device videos cannot be listed on the web.';
       notifyListeners();
       return;
     }
@@ -138,7 +138,7 @@ class MediaLibraryProvider extends ChangeNotifier {
 
       if (!pmState.hasAccess) {
         deviceVideoScanMessage =
-            'ভিডিও দেখতে ফটো/ভিডিও লাইব্রেরির অনুমতি দিন। পিক্সেলে সেটিংস থেকে পুরো বা আংশিক অ্যাক্সেস দিন, তারপর রিফ্রেশ।';
+            'Allow Photos/Videos library access to show videos. On Pixel, grant full or limited access in Settings, then refresh.';
         return;
       }
 
@@ -193,7 +193,7 @@ class MediaLibraryProvider extends ChangeNotifier {
       deviceVideoScanMessage = null;
     } catch (e, st) {
       debugPrint('loadDeviceVideos failed: $e\n$st');
-      deviceVideoScanMessage = 'ভিডিও লোড করা যায়নি। আবার চেষ্টা করুন।';
+      deviceVideoScanMessage = 'Could not load videos. Please try again.';
     } finally {
       isScanningDeviceVideos = false;
       notifyListeners();
@@ -226,7 +226,7 @@ class MediaLibraryProvider extends ChangeNotifier {
   /// Returns `null` on success, or a short error message for the UI.
   Future<String?> deleteVideoFromDevice(MediaTrack track) async {
     if (kIsWeb) {
-      return 'ওয়েবে ভিডিও মুছে ফেলা যায় না।';
+      return 'Videos cannot be deleted on the web.';
     }
 
     final assetId = track.galleryAssetId;
@@ -234,19 +234,19 @@ class MediaLibraryProvider extends ChangeNotifier {
       try {
         final deleted = await PhotoManager.editor.deleteWithIds(<String>[assetId]);
         if (!deleted.contains(assetId)) {
-          return 'ভিডিও মুছে ফেলা যায়নি। অনুমতি বা ফাইল চেক করুন।';
+          return 'Could not delete the video. Check permissions or the file.';
         }
         removeVideo(track);
         return null;
       } catch (e, st) {
         debugPrint('deleteVideoFromDevice gallery: $e\n$st');
-        return 'ভিডিও মুছে ফেলা যায়নি।';
+        return 'Could not delete the video.';
       }
     }
 
     final ok = await deleteLocalMediaFile(track.path);
     if (!ok) {
-      return 'ফাইল মুছে ফেলা যায়নি।';
+      return 'Could not delete the file.';
     }
     removeVideo(track);
     return null;

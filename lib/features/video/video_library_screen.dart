@@ -304,7 +304,7 @@ class _VideoFolderTracksScreen extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute<void>(
-                      builder: (_) => VideoPlayerScreen(track: t),
+                      builder: (_) => VideoPlayerScreen(track: t, playlist: tracks),
                     ),
                   ),
                   child: Row(
